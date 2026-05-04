@@ -3,6 +3,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import entriesRouter from './routes/entries.js';
+import habitsRouter from './routes/habits.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ try {
 }
 
 app.use('/api/entries', entriesRouter);
+app.use('/api/habits', habitsRouter);
 
 app.get('/', (req, res) => {
   res.json({ status: 'Personal Tracker API is running' });

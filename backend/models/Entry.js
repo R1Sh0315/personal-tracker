@@ -9,7 +9,7 @@ const entrySchema = new mongoose.Schema(
     notes: { type: String, trim: true },
     type: {
       type: String,
-      enum: ['expense', 'income', 'health', 'other'],
+      enum: ['expense', 'income', 'investment', 'health', 'other'],
       default: 'other',
     },
   },
