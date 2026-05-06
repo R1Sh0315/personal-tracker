@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import entriesRouter from './routes/entries.js';
 import habitsRouter from './routes/habits.js';
+import journalsRouter from './routes/journals.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ try {
 
 app.use('/api/entries', entriesRouter);
 app.use('/api/habits', habitsRouter);
+app.use('/api/journals', journalsRouter);
 
 app.get('/', (req, res) => {
   res.json({ status: 'Personal Tracker API is running' });

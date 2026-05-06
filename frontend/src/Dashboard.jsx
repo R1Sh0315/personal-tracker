@@ -1,7 +1,54 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format, subDays, subWeeks, subMonths, subYears, isAfter, getWeek, addDays, isSameDay } from 'date-fns';
+import { 
+  format, subDays, subWeeks, subMonths, subYears, 
+  isAfter, getWeek, addDays, isSameDay, 
+  startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth 
+} from 'date-fns';
+
+// Material UI Imports
+import { 
+  Box, Container, Typography, Button, Tabs, Tab, 
+  Card, CardContent, IconButton, Dialog, DialogTitle, 
+  DialogContent, TextField, Select, MenuItem, 
+  FormControl, InputLabel, Chip, Divider, 
+  Table, TableBody, TableCell, TableContainer, 
+  TableHead, TableRow, Paper, Avatar, Tooltip as MuiTooltip,
+  Fab, InputAdornment, Grid
+} from '@mui/material';
+
+// Icons
+import { 
+  Add as AddIcon, 
+  Delete as DeleteIcon, 
+  TrendingUp as TrendingUpIcon, 
+  TrendingDown as TrendingDownIcon,
+  Psychology as PsychologyIcon,
+  AccountBalanceWallet as WalletIcon,
+  Timeline as TimelineIcon,
+  MenuBook as JournalIcon,
+  Settings as SettingsIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  CheckCircle as CheckCircleIcon,
+  RadioButtonUnchecked as UncheckedIcon,
+  Logout as LogoutIcon,
+  Assessment as AssessmentIcon,
+  NoteAlt as NoteIcon,
+  ShowChart as ShowChartIcon
+} from '@mui/icons-material';
+
+import { 
+  HiOutlineLibrary, 
+  HiChartBar, 
+  HiCash, 
+  HiCalendar,
+  HiOutlineClipboardList
+} from 'react-icons/hi';
+import { IoDiamondOutline } from "react-icons/io5";
 
 const defaultForm = {
   title: '',
@@ -23,11 +70,40 @@ function Dashboard() {
   const [timeFilter, setTimeFilter] = useState('1m');
   const [collapsedDates, setCollapsedDates] = useState({});
   const [activeTab, setActiveTab] = useState('habits'); // Default to habits
+  const [activeJournalSubTab, setActiveJournalSubTab] = useState('log');
   const [habits, setHabits] = useState([]);
   const [collapsedHabits, setCollapsedHabits] = useState({}); // To track expanded/collapsed subtasks
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
   const [habitForm, setHabitForm] = useState({ title: '', hasSubtasks: false, subtasks: [{ title: '' }] });
   const habitScrollRef = React.useRef(null);
+  const graphScrollRef = React.useRef(null);
+  const [journals, setJournals] = useState([]);
+  const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
+  const [journalForm, setJournalForm] = useState({
+    type: 'note',
+    market: 'indian',
+    content: '',
+    symbol: '',
+    pnl: 0,
+    netPnl: 0,
+    mentalState: '',
+    date: new Date().toISOString().split('T')[0],
+    assetType: 'options',
+    indexName: 'Nifty50',
+    optionType: 'CE',
+    strikePrice: '',
+    charges: {
+      brokerage: 0,
+      stt: 0,
+      stampDuty: 0,
+      exchangeTurnover: 0,
+      sebiTurnover: 0,
+      gst: 0
+    },
+    leverage: '',
+    spread: 0,
+    direction: 'long'
+  });
   const navigate = useNavigate();
 
   const slugify = (text) => {
@@ -87,7 +163,76 @@ function Dashboard() {
   useEffect(() => {
     fetchEntries();
     fetchHabits();
+    fetchJournals();
   }, []);
+
+  const fetchJournals = async () => {
+    try {
+      const response = await fetch('/api/journals');
+      const data = await response.json();
+      setJournals(data);
+    } catch (err) {
+      console.error('Failed to fetch journals');
+    }
+  };
+
+  const handleJournalSubmit = async (e) => {
+    e.preventDefault();
+    const totalCharges = Object.values(journalForm.charges).reduce((a, b) => a + b, 0);
+    const calculatedNetPnl = journalForm.type === 'trade' ? (journalForm.pnl - totalCharges) : 0;
+
+    const payload = { ...journalForm, netPnl: calculatedNetPnl };
+
+    try {
+      const response = await fetch('/api/journals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        const newEntry = await response.json();
+        setJournals([newEntry, ...journals]);
+        setIsJournalModalOpen(false);
+        setJournalForm({
+          type: 'note',
+          market: 'indian',
+          content: '',
+          symbol: '',
+          pnl: 0,
+          netPnl: 0,
+          mentalState: '',
+          date: new Date().toISOString().split('T')[0],
+          assetType: 'options',
+          indexName: 'Nifty50',
+          optionType: 'CE',
+          strikePrice: '',
+          charges: {
+            brokerage: 0,
+            stt: 0,
+            stampDuty: 0,
+            exchangeTurnover: 0,
+            sebiTurnover: 0,
+            gst: 0
+          },
+          leverage: '',
+          spread: 0,
+          direction: 'long'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to create journal entry');
+    }
+  };
+
+  const deleteJournal = async (id) => {
+    if (!window.confirm('Delete this entry?')) return;
+    try {
+      await fetch(`/api/journals/${id}`, { method: 'DELETE' });
+      setJournals(journals.filter(j => j._id !== id));
+    } catch (err) {
+      console.error('Failed to delete journal entry');
+    }
+  };
 
   const fetchHabits = async () => {
     try {
@@ -372,6 +517,32 @@ function Dashboard() {
     return acc - entry.amount;
   }, 0);
 
+  const calendarDays = Array.from({ length: 35 }, (_, i) => {
+    const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const d = addDays(start, i - start.getDay());
+    return {
+      date: d,
+      dateStr: format(d, 'yyyy-MM-dd'),
+      isCurrentMonth: d.getMonth() === new Date().getMonth()
+    };
+  });
+
+  const getDayEntries = (dateStr) => journals.filter(j => format(new Date(j.date), 'yyyy-MM-dd') === dateStr);
+
+  const cumulativePnlData = journals
+    .filter(j => j.type === 'trade')
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .reduce((acc, j) => {
+      const prevTotal = acc.length > 0 ? acc[acc.length - 1].total : 0;
+      acc.push({
+        date: format(new Date(j.date), 'MMM dd'),
+        total: prevTotal + j.netPnl,
+        pnl: j.pnl,
+        symbol: j.symbol
+      });
+      return acc;
+    }, []);
+
   const visibleDays = Array.from({ length: 30 }, (_, i) => {
     const d = addDays(subDays(new Date(), 15), i);
     return {
@@ -393,6 +564,12 @@ function Dashboard() {
       }
     }
   }, [activeTab]);
+
+  const handleSyncScroll = (source, target) => {
+    if (source.current && target.current) {
+      target.current.scrollLeft = source.current.scrollLeft;
+    }
+  };
 
   // Group days by week for header
   const weeks = visibleDays.reduce((acc, day) => {
@@ -424,37 +601,99 @@ function Dashboard() {
     };
   });
 
+  const journalStats = journals.reduce((acc, j) => {
+    if (j.type === 'trade') {
+      acc.trades += 1;
+      acc.netPnl += (j.netPnl || 0);
+      if (j.pnl > 0) acc.wins += 1;
+    } else {
+      acc.notes += 1;
+    }
+    return acc;
+  }, { trades: 0, netPnl: 0, wins: 0, notes: 0 });
+
+  const winRate = journalStats.trades > 0 ? Math.round((journalStats.wins / journalStats.trades) * 100) : 0;
+
   return (
-    <div className="app-shell">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-        <div>
-          <h1>Personal Dashboard</h1>
-          <nav className="main-nav">
-            <button className={`nav-link ${activeTab === 'habits' ? 'active' : ''}`} onClick={() => setActiveTab('habits')}>Habits</button>
-            <button className={`nav-link ${activeTab === 'finance' ? 'active' : ''}`} onClick={() => setActiveTab('finance')}>Finance</button>
-            <button className={`nav-link ${activeTab === 'journal' ? 'active' : ''}`} onClick={() => setActiveTab('journal')}>Journal</button>
-          </nav>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          {activeTab === 'finance' && (
-            <p style={{ margin: '0 0 8px' }}>Balance: <span style={{ fontWeight: 'bold', color: totalBalance >= 0 ? '#16a34a' : '#dc2626' }}>₹{totalBalance.toLocaleString()}</span></p>
-          )}
-          <button className="btn-secondary btn-small" onClick={handleLogout}>Logout</button>
-        </div>
-      </header>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9', pb: 8 }}>
+      {/* Header */}
+      <Paper elevation={0} sx={{ borderBottom: '1px solid #e2e8f0', bgcolor: 'white', mb: 4 }}>
+        <Container maxWidth="lg">
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Avatar sx={{ bgcolor: '#2563eb', width: 40, height: 40 }}>
+                <IoDiamondOutline size={24} />
+              </Avatar>
+              <Typography variant="h5" fontWeight="800" sx={{ letterSpacing: '-0.5px' }}>
+                Personal Dashboard
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+               {activeTab === 'finance' && (
+                 <Box sx={{ textAlign: 'right' }}>
+                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Total Balance</Typography>
+                   <Typography variant="body1" fontWeight="700" color={totalBalance >= 0 ? 'success.main' : 'error.main'}>
+                     ₹{totalBalance.toLocaleString()}
+                   </Typography>
+                 </Box>
+               )}
+               <Button 
+                variant="outlined" 
+                color="inherit" 
+                startIcon={<LogoutIcon />}
+                onClick={handleLogout}
+                sx={{ borderRadius: '10px', textTransform: 'none', fontWeight: '600', borderColor: '#e2e8f0' }}
+              >
+                Logout
+              </Button>
+            </Box>
+          </Box>
 
-      <main>
+          <Tabs 
+            value={activeTab === 'habits' ? 0 : activeTab === 'finance' ? 1 : 2} 
+            onChange={(e, val) => setActiveTab(val === 0 ? 'habits' : val === 1 ? 'finance' : 'journal')}
+            sx={{
+              '& .MuiTab-root': { textTransform: 'none', fontWeight: '700', fontSize: '1rem', minWidth: 100 },
+              '& .Mui-selected': { color: '#2563eb !important' },
+              '& .MuiTabs-indicator': { bgcolor: '#2563eb', height: 3, borderRadius: '3px 3px 0 0' }
+            }}
+          >
+            <Tab icon={<HiOutlineLibrary size={20} />} iconPosition="start" label="Habits" />
+            <Tab icon={<HiCash size={20} />} iconPosition="start" label="Finance" />
+            <Tab icon={<JournalIcon />} iconPosition="start" label="Journal" />
+          </Tabs>
+        </Container>
+      </Paper>
+
+      <Container maxWidth="lg">
         {activeTab === 'habits' && (
-          <section className="panel" style={{ display: 'grid', gridTemplateColumns:'1fr' }}>
-            <div className="panel-header" style={{ marginBottom: '24px' }}>
-              <div>
-                <h2>Weekly Habits</h2>
-                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>Track your daily progress</p>
-              </div>
-              <button onClick={() => setIsHabitModalOpen(true)}>Add Habit</button>
-            </div>
+          <Box>
+            {/* Habit Grid Panel */}
+            <Card sx={{ borderRadius: '20px', mb: 3, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'white' }}>
+                <Box>
+                  <Typography variant="h6" fontWeight="800">Weekly Habits</Typography>
+                  <Typography variant="body2" color="text.secondary">Track your daily progress and rituals</Typography>
+                </Box>
+                <Button 
+                  variant="contained" 
+                  startIcon={<AddIcon />}
+                  onClick={() => setIsHabitModalOpen(true)}
+                  sx={{ bgcolor: '#2563eb', borderRadius: '12px', px: 3, '&:hover': { bgcolor: '#1d4ed8' }, textTransform: 'none', fontWeight: '700' }}
+                >
+                  Add Habit
+                </Button>
+              </Box>
+              
+              <Divider />
+              <Box sx={{ p: 2 }}>
 
-            <div className="habit-scroll-container" ref={habitScrollRef}>
+            <Box 
+              className="habit-scroll-container" 
+              ref={habitScrollRef}
+              onScroll={() => handleSyncScroll(habitScrollRef, graphScrollRef)}
+              sx={{ overflowX: 'auto' }}
+            >
               <table className="habit-grid">
                 <thead>
                   <tr className="week-header-row">
@@ -470,13 +709,13 @@ function Dashboard() {
                     ))}
                   </tr>
                   <tr>
-                    <th className="sticky-col header-cell"></th>
+                    <TableCell sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: '#f8fafc', borderRight: '2px solid #f1f5f9' }} />
                     {visibleDays.map(day => (
-                      <th key={day.dateStr} className={`day-header-cell ${day.isToday ? 'today-col' : ''}`}>
-                        <div className="day-label">{day.label}</div>
-                        <div className="day-number">{day.dayNum}</div>
-                        {day.isToday && <div className="today-indicator">Today</div>}
-                      </th>
+                      <TableCell key={day.dateStr} sx={{ textAlign: 'center', p: 1, minWidth: 60, bgcolor: day.isToday ? '#eff6ff' : 'transparent', borderLeft: '1px solid #f1f5f9' }}>
+                        <Typography variant="caption" sx={{ display: 'block', color: '#94a3b8', fontWeight: '700' }}>{day.label}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: '800', color: day.isToday ? 'primary.main' : '#475569' }}>{day.dayNum}</Typography>
+                        {day.isToday && <Typography variant="caption" sx={{ bgcolor: 'primary.main', color: 'white', px: 0.5, borderRadius: '4px', fontSize: '0.6rem' }}>TODAY</Typography>}
+                      </TableCell>
                     ))}
                   </tr>
                 </thead>
@@ -488,25 +727,30 @@ function Dashboard() {
                       <React.Fragment key={habit._id}>
                         {/* Main Habit Row */}
                         <tr className={`habit-row-main ${habitClass}`}>
-                          <td className="sticky-col habit-title-cell">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <TableCell sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: 'white', minWidth: 200, borderRight: '2px solid #f1f5f9' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               {habit.hasSubtasks && (
-                                <div
-                                  className="toggle-btn-circle"
-                                  style={{ width: '18px', height: '18px', fontSize: '12px', cursor: 'pointer', margin: 0, zIndex: 2 }}
+                                <Box
                                   onClick={() => toggleHabitGroup(habit._id)}
+                                  sx={{ 
+                                    width: 20, height: 20, borderRadius: '50%', bgcolor: '#f1f5f9', 
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '14px', cursor: 'pointer', color: '#64748b', fontWeight: '800'
+                                  }}
                                 >
-                                  {isExpanded ? '-' : '+'}
-                                </div>
+                                  {isExpanded ? '−' : '+'}
+                                </Box>
                               )}
                               {habit.hasSubtasks && isExpanded && (
-                                <div className="tree-line-vertical" style={{ left: '9px', top: '50%' }}></div>
+                                <Box className="tree-line-vertical" sx={{ left: '10px', top: '50%', position: 'absolute' }} />
                               )}
-                              {!habit.hasSubtasks && <div style={{ width: '18px' }}></div>}
-                              <span>{habit.title}</span>
-                              <button className="delete-habit-btn" onClick={() => deleteHabit(habit._id)}>&times;</button>
-                            </div>
-                          </td>
+                              {!habit.hasSubtasks && <Box sx={{ width: 20 }} />}
+                              <Typography variant="body2" fontWeight="700">{habit.title}</Typography>
+                              <IconButton size="small" onClick={() => deleteHabit(habit._id)} sx={{ ml: 'auto', opacity: 0.3, '&:hover': { opacity: 1 } }}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          </TableCell>
                           {!habit.hasSubtasks && visibleDays.map(day => {
                             const isDone = (habit.completions[day.dateStr] || []).includes(-1);
                             return (
@@ -558,249 +802,693 @@ function Dashboard() {
                 </tbody>
               </table>
 
-              {/* Completion Trend Graph */}
-              <div style={{ 
-                marginTop: '32px', 
-                paddingLeft: '200px', // Matches sticky column width
-                width: 'max-content',
-                minWidth: '100%'
-              }}>
-                <div style={{ marginBottom: '16px', color: '#475569', fontSize: '0.9rem', fontWeight: '600' }}>Completion Trend (%)</div>
-                <LineChart width={visibleDays.length * 60} height={150} data={completionData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" hide />
-                  <YAxis hide domain={[0, 100]} />
-                  <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="custom-tooltip" style={{ backgroundColor: 'white', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
-                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>{payload[0].payload.fullDate}</p>
-                            <p style={{ margin: 0, fontWeight: 'bold', color: '#2563eb' }}>{payload[0].value}% Done</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="percentage" 
-                    stroke="#2563eb" 
-                    strokeWidth={3} 
-                    dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }} 
-                    activeDot={{ r: 6 }} 
-                  />
-                </LineChart>
-              </div>
-            </div>
+              </Box>
+            </Box>
+          </Card>
+
             {habits.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-                <p>No habits added yet. Start by adding your first habit!</p>
-              </div>
+              <Box sx={{ textAlign: 'center', py: 8, bgcolor: 'white', borderRadius: '20px', mb: 3 }}>
+                <Typography color="text.secondary">No habits added yet. Start by adding your first habit!</Typography>
+              </Box>
             )}
-          </section>
+
+            {/* Completion Trend Panel */}
+            <Card sx={{ borderRadius: '20px', mb: 3, p: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <Typography variant="h6" fontWeight="800" sx={{ mb: 2 }}>Completion Trend</Typography>
+              <Box 
+                className="habit-scroll-container" 
+                ref={graphScrollRef}
+                onScroll={() => handleSyncScroll(graphScrollRef, habitScrollRef)}
+                sx={{ overflowX: 'auto', pb: 2 }}
+              >
+                <Box sx={{
+                  paddingLeft: '200px', // Matches sticky column width
+                  width: 'max-content',
+                  minWidth: '100%'
+                }}>
+                  <LineChart width={visibleDays.length * 60} height={150} data={completionData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" hide />
+                    <YAxis hide domain={[0, 100]} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <Paper sx={{ p: 1.5, borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                              <Typography variant="caption" display="block" color="text.secondary">{payload[0].payload.fullDate}</Typography>
+                              <Typography variant="body2" fontWeight="700" color="primary.main">{payload[0].value}% Done</Typography>
+                            </Paper>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="percentage"
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </Box>
+              </Box>
+            </Card>
+          </Box>
         )}
 
         {activeTab === 'journal' && (
-          <section className="panel">
-            <div className="panel-header">
-              <h2>My Journal</h2>
-              <button>New Entry</button>
-            </div>
-            <div style={{ marginTop: '20px', textAlign: 'center', padding: '40px', color: '#64748b' }}>
-              <p>Write your thoughts here. (Implementation coming soon...)</p>
-            </div>
-          </section>
+          <Box>
+            <Tabs 
+              value={activeJournalSubTab === 'log' ? 0 : 1}
+              onChange={(e, val) => setActiveJournalSubTab(val === 0 ? 'log' : 'stats')}
+              sx={{ mb: 3, '& .MuiTab-root': { fontWeight: '700' } }}
+            >
+              <Tab label="Journal Log" />
+              <Tab label="Performance Stats" />
+            </Tabs>
+
+            {activeJournalSubTab === 'log' ? (
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                  <Card sx={{ borderRadius: '20px', mb: 3 }}>
+                    <CardContent>
+                      <Typography variant="subtitle2" color="text.secondary" fontWeight="700" sx={{ mb: 2, textAlign: 'center' }}>
+                        {format(new Date(), 'MMMM yyyy')}
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+                          <Typography key={d} variant="caption" align="center" fontWeight="800" color="#94a3b8">{d}</Typography>
+                        ))}
+                        {calendarDays.map(day => {
+                          const dayEntries = getDayEntries(day.dateStr);
+                          const dayPnl = dayEntries.filter(e => e.type === 'trade').reduce((acc, e) => acc + (e.netPnl || 0), 0);
+                          const hasNote = dayEntries.some(e => e.type === 'note');
+                          const hasTrade = dayEntries.some(e => e.type === 'trade');
+
+                          let color = 'transparent';
+                          if (hasTrade) color = dayPnl > 0 ? '#f0fdf4' : (dayPnl < 0 ? '#fef2f2' : '#f8fafc');
+                          else if (hasNote) color = '#f1f5f9';
+
+                          return (
+                            <MuiTooltip key={day.dateStr} title={dayPnl !== 0 ? `P&L: ₹${dayPnl.toLocaleString()}` : ''}>
+                              <Box sx={{ 
+                                aspectRatio: '1', 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                borderRadius: '8px',
+                                bgcolor: color,
+                                color: !day.isCurrentMonth ? '#e2e8f0' : (dayPnl > 0 ? '#166534' : (dayPnl < 0 ? '#991b1b' : '#475569')),
+                                position: 'relative',
+                                fontSize: '0.75rem',
+                                fontWeight: (hasTrade || hasNote) ? '800' : '500'
+                              }}>
+                                {format(day.date, 'd')}
+                                <Box sx={{ display: 'flex', gap: 0.2, position: 'absolute', bottom: 2 }}>
+                                  {dayEntries.map(e => (
+                                    <Box key={e._id} sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: e.type === 'trade' ? (e.netPnl >= 0 ? '#16a34a' : '#dc2626') : '#94a3b8' }} />
+                                  ))}
+                                </Box>
+                              </Box>
+                            </MuiTooltip>
+                          );
+                        })}
+                      </Box>
+                    </CardContent>
+                  </Card>
+
+                  <Card sx={{ borderRadius: '20px', bgcolor: '#2563eb', color: 'white' }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 32, height: 32 }}>
+                          <HiChartBar size={18} />
+                        </Avatar>
+                        <Typography variant="subtitle2" fontWeight="700">Quick Stats</Typography>
+                      </Box>
+                      <Typography variant="h4" fontWeight="800">₹{journalStats.netPnl.toLocaleString()}</Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.8 }}>Net Profit / Loss (This Month)</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                <Grid item xs={12} md={8}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                    <Typography variant="h6" fontWeight="800">Daily Activity</Typography>
+                    <Button 
+                      variant="contained" 
+                      startIcon={<AddIcon />}
+                      onClick={() => setIsJournalModalOpen(true)}
+                      sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: '700' }}
+                    >
+                      New Entry
+                    </Button>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {journals.map(entry => (
+                      <Card key={entry._id} sx={{ 
+                        borderRadius: '20px', 
+                        borderLeft: `6px solid ${entry.type === 'trade' ? (entry.netPnl >= 0 ? '#16a34a' : '#dc2626') : '#94a3b8'}`,
+                        transition: 'transform 0.2s',
+                        '&:hover': { transform: 'translateY(-4px)' }
+                      }}>
+                        <CardContent sx={{ p: 3 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" fontWeight="700">
+                                {format(new Date(entry.date), 'MMMM dd, yyyy')}
+                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                <Chip 
+                                  label={entry.type.toUpperCase()} 
+                                  size="small" 
+                                  sx={{ 
+                                    fontWeight: '800', 
+                                    fontSize: '0.65rem', 
+                                    bgcolor: entry.type === 'trade' ? '#dcfce7' : '#f1f5f9',
+                                    color: entry.type === 'trade' ? '#166534' : '#475569'
+                                  }} 
+                                />
+                                {entry.type === 'trade' && (
+                                  <Chip 
+                                    label={entry.direction?.toUpperCase()} 
+                                    size="small" 
+                                    color={entry.direction === 'long' ? 'success' : 'error'}
+                                    variant="outlined"
+                                    sx={{ fontWeight: '800', fontSize: '0.65rem' }} 
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                            <IconButton size="small" onClick={() => deleteJournal(entry._id)} color="error">
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+
+                          {entry.type === 'trade' && (
+                            <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: '12px', mb: 2 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h5" fontWeight="800" color={entry.netPnl >= 0 ? 'success.main' : 'error.main'}>
+                                  ₹{entry.netPnl?.toLocaleString()}
+                                </Typography>
+                                <Typography variant="body2" fontWeight="700">{entry.symbol}</Typography>
+                              </Box>
+                              <Grid container spacing={2}>
+                                {entry.market === 'indian' && (
+                                  <Grid item xs={6}>
+                                    <Typography variant="caption" color="text.secondary">Strategy</Typography>
+                                    <Typography variant="body2" fontWeight="600">
+                                      {entry.assetType === 'options' ? `${entry.strikePrice} ${entry.optionType}` : entry.assetType}
+                                    </Typography>
+                                  </Grid>
+                                )}
+                                <Grid item xs={6}>
+                                  <Typography variant="caption" color="text.secondary">Market</Typography>
+                                  <Typography variant="body2" fontWeight="600" sx={{ textTransform: 'capitalize' }}>{entry.market}</Typography>
+                                </Grid>
+                              </Grid>
+                            </Box>
+                          )}
+
+                          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', color: '#1e293b', mb: 2 }}>
+                            {entry.content}
+                          </Typography>
+
+                          {entry.mentalState && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#64748b' }}>
+                              <PsychologyIcon sx={{ fontSize: 18 }} />
+                              <Typography variant="caption" fontWeight="600">{entry.mentalState}</Typography>
+                            </Box>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                </Grid>
+              </Grid>
+            ) : (
+              <Box>
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ borderRadius: '20px', textAlign: 'center', p: 2 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="700">NET P&L</Typography>
+                      <Typography variant="h4" fontWeight="800" color={journalStats.netPnl >= 0 ? 'success.main' : 'error.main'}>
+                        ₹{journalStats.netPnl.toLocaleString()}
+                      </Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ borderRadius: '20px', textAlign: 'center', p: 2 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="700">WIN RATE</Typography>
+                      <Typography variant="h4" fontWeight="800" color="primary">{winRate}%</Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ borderRadius: '20px', textAlign: 'center', p: 2 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="700">PROFIT DAYS</Typography>
+                      <Typography variant="h4" fontWeight="800" color="success.main">{journalStats.wins}</Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Card sx={{ borderRadius: '20px', textAlign: 'center', p: 2 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="700">TOTAL TRADES</Typography>
+                      <Typography variant="h4" fontWeight="800">{journalStats.trades}</Typography>
+                    </Card>
+                  </Grid>
+                </Grid>
+
+                <Card sx={{ borderRadius: '20px', p: 4 }}>
+                  <Typography variant="h6" fontWeight="800" sx={{ mb: 4 }}>Equity Curve (Growth Portfolio)</Typography>
+                  <Box sx={{ width: '100%', height: 400 }}>
+                    <ResponsiveContainer>
+                      <LineChart data={cumulativePnlData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
+                        <Tooltip 
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <Paper sx={{ p: 2, borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}>
+                                  <Typography variant="caption" color="text.secondary">{payload[0].payload.date} - {payload[0].payload.symbol}</Typography>
+                                  <Typography variant="h6" fontWeight="800" color={payload[0].value >= 0 ? 'success.main' : 'error.main'}>
+                                    ₹{payload[0].value.toLocaleString()}
+                                  </Typography>
+                                </Paper>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="total" 
+                          stroke="#2563eb" 
+                          strokeWidth={4} 
+                          dot={{ r: 6, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }} 
+                          activeDot={{ r: 8 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </Card>
+              </Box>
+            )}
+          </Box>
         )}
 
         {activeTab === 'finance' && (
-          <>
-            <section className="panel chart-panel">
-              <div className="panel-header" style={{ marginBottom: '16px' }}>
-                <h2>Finance Overview</h2>
-                <div className="action-buttons">
-                  <button className={`btn-small ${timeFilter === '1d' ? 'btn-active' : 'btn-secondary'}`} onClick={() => setTimeFilter('1d')}>1D</button>
-                  <button className={`btn-small ${timeFilter === '1w' ? 'btn-active' : 'btn-secondary'}`} onClick={() => setTimeFilter('1w')}>1W</button>
-                  <button className={`btn-small ${timeFilter === '1m' ? 'btn-active' : 'btn-secondary'}`} onClick={() => setTimeFilter('1m')}>1M</button>
-                  <button className={`btn-small ${timeFilter === '1y' ? 'btn-active' : 'btn-secondary'}`} onClick={() => setTimeFilter('1y')}>1Y</button>
-                  <button className={`btn-small ${timeFilter === 'all' ? 'btn-active' : 'btn-secondary'}`} onClick={() => setTimeFilter('all')}>All</button>
-                </div>
-              </div>
-              <div style={{ width: '100%', height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `₹${value}`} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      formatter={(value) => [`₹${value}`, '']}
-                    />
-                    <Legend />
-                    <Line type="monotone" dataKey="balance" name="Net Balance" stroke="#8b5cf6" strokeWidth={3} dot={{ strokeWidth: 2, r: 4 }} activeDot={{ r: 8 }} />
-                    <Line type="monotone" dataKey="income" name="Income" stroke="#16a34a" strokeWidth={2} dot={false} />
+          <Box>
+            <Card sx={{ borderRadius: '20px', mb: 3, p: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box>
+                  <Typography variant="h6" fontWeight="800">Finance Overview</Typography>
+                  <Typography variant="body2" color="text.secondary">Monitor your cash flow and investments</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1, bgcolor: '#f1f5f9', p: 0.5, borderRadius: '12px' }}>
+                  {['1d', '1w', '1m', '1y', 'all'].map(f => (
+                    <Button 
+                      key={f}
+                      size="small"
+                      onClick={() => setTimeFilter(f)}
+                      sx={{ 
+                        minWidth: 40, 
+                        textTransform: 'uppercase', 
+                        fontSize: '0.7rem', 
+                        fontWeight: '800',
+                        borderRadius: '8px',
+                        bgcolor: timeFilter === f ? 'white' : 'transparent',
+                        color: timeFilter === f ? '#2563eb' : '#64748b',
+                        boxShadow: timeFilter === f ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                        '&:hover': { bgcolor: timeFilter === f ? 'white' : '#e2e8f0' }
+                      }}
+                    >
+                      {f}
+                    </Button>
+                  ))}
+                </Box>
+              </Box>
+
+              <Box sx={{ width: '100%', height: 350 }}>
+                <ResponsiveContainer>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(val) => `₹${val}`} />
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                    <Legend iconType="circle" />
+                    <Line type="monotone" dataKey="balance" name="Net Balance" stroke="#6366f1" strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="income" name="Income" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                     <Line type="monotone" dataKey="invest" name="Investment" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="expense" name="Expense" stroke="#dc2626" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="expense" name="Expense" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
-            </section>
+              </Box>
+            </Card>
 
-            <section className="panel list-panel">
-              <div className="panel-header">
-                <h2>Finance Entries</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  {loading && <span>Loading…</span>}
-                  <button onClick={() => setIsModalOpen(true)}>Add new entry</button>
-                </div>
-              </div>
-
-              {entries.length === 0 && !loading ? (
-                <p className="empty-state">No entries yet. Add one to get started.</p>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="entries-table">
-                    <tbody>
-                      {renderTableRows()}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-      </main>
-
-      {isModalOpen && activeTab === 'finance' && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Add new entry</h2>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <label>
-                Date
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  required
-                />
-              </label>
-
-              <label>
-                Title
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  required
-                />
-              </label>
-
-              <label>
-                Category
-                <input
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                />
-              </label>
-
-              <label>
-                Amount
-                <input
-                  type="number"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-                />
-              </label>
-
-              <label>
-                Type
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+            <Card sx={{ borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" fontWeight="800">Recent Transactions</Typography>
+                <Button 
+                  variant="contained" 
+                  startIcon={<AddIcon />}
+                  onClick={() => setIsModalOpen(true)}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: '700' }}
                 >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                  <option value="investment">Investment</option>
-                  <option value="health">Health</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
+                  Add Entry
+                </Button>
+              </Box>
+              <TableContainer>
+                <Table sx={{ minWidth: 650 }}>
+                  <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: '700', color: '#64748b' }}>Date</TableCell>
+                      <TableCell sx={{ fontWeight: '700', color: '#64748b' }}>Title</TableCell>
+                      <TableCell sx={{ fontWeight: '700', color: '#64748b' }}>Category</TableCell>
+                      <TableCell sx={{ fontWeight: '700', color: '#64748b' }}>Type</TableCell>
+                      <TableCell sx={{ fontWeight: '700', color: '#64748b' }}>Amount</TableCell>
+                      <TableCell sx={{ fontWeight: '700', color: '#64748b' }}>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {entries.map(entry => (
+                      <TableRow key={entry._id} hover>
+                        <TableCell sx={{ fontSize: '0.85rem' }}>{format(new Date(entry.date), 'MMM dd, yyyy')}</TableCell>
+                        <TableCell sx={{ fontWeight: '600' }}>{entry.title}</TableCell>
+                        <TableCell>
+                          <Chip label={entry.category} size="small" variant="outlined" sx={{ fontWeight: '600', fontSize: '0.7rem' }} />
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={entry.type} 
+                            size="small" 
+                            sx={{ 
+                              fontWeight: '800', 
+                              fontSize: '0.65rem',
+                              bgcolor: entry.type === 'income' ? '#dcfce7' : (entry.type === 'expense' ? '#fef2f2' : '#eff6ff'),
+                              color: entry.type === 'income' ? '#166534' : (entry.type === 'expense' ? '#991b1b' : '#1e40af')
+                            }} 
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: '800', color: entry.type === 'income' ? 'success.main' : 'error.main' }}>
+                          {entry.type === 'income' ? '+' : '-'}₹{entry.amount.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <IconButton size="small" color="error" onClick={() => handleDelete(entry._id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {entries.length === 0 && !loading && (
+                <Box sx={{ p: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">No entries found for this period.</Typography>
+                </Box>
+              )}
+            </Card>
+          </Box>
+        )}
+      </Container>
 
-              <label>
-                Notes
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+      {/* Finance Modal */}
+      <Dialog 
+        open={isModalOpen && activeTab === 'finance'} 
+        onClose={() => setIsModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '24px' } }}
+      >
+        <DialogTitle sx={{ fontWeight: '800' }}>Add Finance Entry</DialogTitle>
+        <DialogContent>
+          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} InputLabelProps={{ shrink: true }} required />
+              </Grid>
+              <Grid item xs={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Type</InputLabel>
+                  <Select value={form.type} label="Type" onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                    <MenuItem value="expense">Expense</MenuItem>
+                    <MenuItem value="income">Income</MenuItem>
+                    <MenuItem value="investment">Investment</MenuItem>
+                    <MenuItem value="health">Health</MenuItem>
+                    <MenuItem value="other">Other</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Amount" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline rows={2} label="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </Grid>
+            </Grid>
+            {error && <Typography color="error" variant="caption" sx={{ mt: 1, display: 'block' }}>{error}</Typography>}
+            <Button fullWidth variant="contained" type="submit" sx={{ mt: 3, py: 1.5, borderRadius: '12px', fontWeight: '700', textTransform: 'none' }}>
+              Save Entry
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+      {/* Journal Modal */}
+      <Dialog 
+        open={isJournalModalOpen} 
+        onClose={() => setIsJournalModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '24px', p: 1 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6" fontWeight="800">New Journal Entry</Typography>
+          <IconButton onClick={() => setIsJournalModalOpen(false)}><DeleteIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 3 }}>
+            <Tabs 
+              value={journalForm.type === 'note' ? 0 : 1}
+              onChange={(e, val) => setJournalForm({ ...journalForm, type: val === 0 ? 'note' : 'trade' })}
+              sx={{ bgcolor: '#f1f5f9', borderRadius: '12px', p: 0.5, '& .MuiTabs-indicator': { display: 'none' } }}
+            >
+              <Tab 
+                label="Note" 
+                sx={{ 
+                  borderRadius: '10px', 
+                  minHeight: '40px',
+                  fontWeight: '700',
+                  '&.Mui-selected': { bgcolor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', color: '#2563eb' } 
+                }} 
+              />
+              <Tab 
+                label="Trade Log" 
+                sx={{ 
+                  borderRadius: '10px', 
+                  minHeight: '40px',
+                  fontWeight: '700',
+                  '&.Mui-selected': { bgcolor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', color: '#2563eb' } 
+                }} 
+              />
+            </Tabs>
+          </Box>
+
+          <form onSubmit={handleJournalSubmit}>
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <TextField 
+                  fullWidth
+                  label="Date"
+                  type="date"
+                  value={journalForm.date}
+                  onChange={(e) => setJournalForm({ ...journalForm, date: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
                 />
-              </label>
-
-              <button type="submit">Save entry</button>
-            </form>
-            {error && <p className="error-message">{error}</p>}
-          </div>
-        </div>
-      )}
-      {isHabitModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsHabitModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Add Habit</h2>
-              <button className="close-btn" onClick={() => setIsHabitModalOpen(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleHabitSubmit}>
-              <label>
-                Habit Title
-                <input
-                  placeholder="e.g. Morning Routine"
-                  value={habitForm.title}
-                  onChange={(e) => setHabitForm({ ...habitForm, title: e.target.value })}
-                  required
-                />
-              </label>
-
-              <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  type="checkbox"
-                  id="hasSubtasks"
-                  checked={habitForm.hasSubtasks}
-                  onChange={(e) => setHabitForm({ ...habitForm, hasSubtasks: e.target.checked })}
-                  style={{ width: 'auto', marginTop: '0' }}
-                />
-                <label htmlFor="hasSubtasks" style={{ marginBottom: '0' }}>Add sub-tasks?</label>
-              </div>
-
-              {habitForm.hasSubtasks && (
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ margin: '0' }}>Sub-tasks</h4>
-                    <button type="button" className="btn-small btn-secondary" onClick={addSubtaskInput}>+ Add</button>
-                  </div>
-                  {habitForm.subtasks.map((st, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                      <input
-                        placeholder={`Sub-task ${idx + 1}`}
-                        value={st.title}
-                        onChange={(e) => handleSubtaskInputChange(idx, e.target.value)}
-                        required
-                      />
-                      {habitForm.subtasks.length > 1 && (
-                        <button type="button" className="btn-danger btn-small" onClick={() => removeSubtaskInput(idx)}>&times;</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              </Grid>
+              {journalForm.type === 'trade' && (
+                <Grid item xs={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Market</InputLabel>
+                    <Select
+                      value={journalForm.market}
+                      label="Market"
+                      onChange={(e) => setJournalForm({ ...journalForm, market: e.target.value })}
+                    >
+                      <MenuItem value="indian">Indian Market</MenuItem>
+                      <MenuItem value="forex">Forex Market</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
               )}
 
-              <button type="submit" style={{ width: '100%' }}>Create Habit</button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+              {journalForm.type === 'trade' && (
+                <>
+                  <Grid item xs={6}>
+                    <TextField 
+                      fullWidth 
+                      label="Symbol / Index"
+                      placeholder={journalForm.market === 'indian' ? "e.g. NIFTY50" : "e.g. EURUSD"}
+                      value={journalForm.symbol}
+                      onChange={(e) => setJournalForm({ ...journalForm, symbol: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Direction</InputLabel>
+                      <Select
+                        value={journalForm.direction}
+                        label="Direction"
+                        onChange={(e) => setJournalForm({ ...journalForm, direction: e.target.value })}
+                      >
+                        <MenuItem value="long">Long (Buy)</MenuItem>
+                        <MenuItem value="short">Short (Sell)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  {journalForm.market === 'indian' && (
+                    <Grid item xs={12}>
+                      <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '16px' }}>
+                        <Typography variant="subtitle2" fontWeight="700" sx={{ mb: 2 }}>Indian Market Specs</Typography>
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <FormControl fullWidth>
+                              <InputLabel>Asset Type</InputLabel>
+                              <Select
+                                value={journalForm.assetType}
+                                label="Asset Type"
+                                onChange={(e) => setJournalForm({ ...journalForm, assetType: e.target.value })}
+                              >
+                                <MenuItem value="equity">Equity</MenuItem>
+                                <MenuItem value="options">Options</MenuItem>
+                                <MenuItem value="futures">Futures</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          {journalForm.assetType === 'options' && (
+                            <Grid item xs={6}>
+                              <TextField fullWidth label="Strike Price" value={journalForm.strikePrice} onChange={(e) => setJournalForm({ ...journalForm, strikePrice: e.target.value })} />
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Paper>
+                    </Grid>
+                  )}
+
+                  <Grid item xs={12}>
+                    <TextField 
+                      fullWidth 
+                      label="Gross P&L" 
+                      type="number"
+                      value={journalForm.pnl}
+                      onChange={(e) => setJournalForm({ ...journalForm, pnl: Number(e.target.value) })}
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid item xs={12}>
+                <TextField 
+                  fullWidth 
+                  multiline 
+                  rows={3} 
+                  label={journalForm.type === 'trade' ? 'Trade Notes' : 'Thoughts'}
+                  value={journalForm.content}
+                  onChange={(e) => setJournalForm({ ...journalForm, content: e.target.value })}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField 
+                  fullWidth 
+                  label="Mental State" 
+                  value={journalForm.mentalState}
+                  onChange={(e) => setJournalForm({ ...journalForm, mentalState: e.target.value })}
+                  InputProps={{ startAdornment: <InputAdornment position="start">🧠</InputAdornment> }}
+                />
+              </Grid>
+            </Grid>
+            <Button 
+              fullWidth 
+              variant="contained" 
+              type="submit" 
+              sx={{ mt: 3, py: 1.5, borderRadius: '12px', fontWeight: '700', textTransform: 'none' }}
+            >
+              Save Entry
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Habit Modal */}
+      <Dialog 
+        open={isHabitModalOpen} 
+        onClose={() => setIsHabitModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '24px' } }}
+      >
+        <DialogTitle sx={{ fontWeight: '800' }}>Add Habit</DialogTitle>
+        <DialogContent>
+          <Box component="form" onSubmit={handleHabitSubmit} sx={{ mt: 1 }}>
+            <TextField
+              fullWidth
+              label="Habit Title"
+              placeholder="e.g. Morning Routine"
+              value={habitForm.title}
+              onChange={(e) => setHabitForm({ ...habitForm, title: e.target.value })}
+              required
+              sx={{ mb: 2 }}
+            />
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <CheckCircleIcon sx={{ mr: 1, color: habitForm.hasSubtasks ? '#2563eb' : '#94a3b8' }} />
+              <Typography variant="body2" sx={{ flexGrow: 1, fontWeight: '600' }}>Add sub-tasks?</Typography>
+              <Button onClick={() => setHabitForm({ ...habitForm, hasSubtasks: !habitForm.hasSubtasks })} sx={{ textTransform: 'none', fontWeight: '700' }}>
+                {habitForm.hasSubtasks ? 'Enabled' : 'Disabled'}
+              </Button>
+            </Box>
+
+            {habitForm.hasSubtasks && (
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight="700">Sub-tasks</Typography>
+                  <IconButton size="small" color="primary" onClick={addSubtaskInput}><AddIcon /></IconButton>
+                </Box>
+                {habitForm.subtasks.map((st, idx) => (
+                  <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                    <TextField 
+                      fullWidth 
+                      size="small" 
+                      placeholder={`Sub-task ${idx + 1}`} 
+                      value={st.title}
+                      onChange={(e) => handleSubtaskInputChange(idx, e.target.value)}
+                    />
+                    <IconButton size="small" onClick={() => removeSubtaskInput(idx)} disabled={habitForm.subtasks.length === 1}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            <Button fullWidth variant="contained" type="submit" sx={{ py: 1.5, borderRadius: '12px', fontWeight: '700', textTransform: 'none' }}>
+              Create Habit
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </Box>
   );
 }
 
