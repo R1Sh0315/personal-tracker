@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import entriesRouter from './routes/entries.js';
 import habitsRouter from './routes/habits.js';
 import journalsRouter from './routes/journals.js';
+import authRouter from './routes/auth.js';
+import auth from './middleware/auth.js';
 
 dotenv.config();
 
@@ -30,9 +32,10 @@ try {
   process.exit(1);
 }
 
-app.use('/api/entries', entriesRouter);
-app.use('/api/habits', habitsRouter);
-app.use('/api/journals', journalsRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/entries', auth, entriesRouter);
+app.use('/api/habits', auth, habitsRouter);
+app.use('/api/journals', auth, journalsRouter);
 
 // Serve static files from the React frontend app
 const frontendPath = path.join(__dirname, '../frontend/dist');

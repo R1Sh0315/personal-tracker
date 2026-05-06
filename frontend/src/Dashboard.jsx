@@ -142,9 +142,13 @@ function Dashboard() {
 
   const handleSaveEdit = async (id) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`/api/entries/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(editForm),
       });
 
@@ -168,7 +172,10 @@ function Dashboard() {
 
   const fetchJournals = async () => {
     try {
-      const response = await fetch('/api/journals');
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/journals', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await response.json();
       setJournals(data);
     } catch (err) {
@@ -184,9 +191,13 @@ function Dashboard() {
     const payload = { ...journalForm, netPnl: calculatedNetPnl };
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/journals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       });
       if (response.ok) {
@@ -227,7 +238,11 @@ function Dashboard() {
   const deleteJournal = async (id) => {
     if (!window.confirm('Delete this entry?')) return;
     try {
-      await fetch(`/api/journals/${id}`, { method: 'DELETE' });
+      const token = localStorage.getItem('token');
+      await fetch(`/api/journals/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setJournals(journals.filter(j => j._id !== id));
     } catch (err) {
       console.error('Failed to delete journal entry');
@@ -236,7 +251,10 @@ function Dashboard() {
 
   const fetchHabits = async () => {
     try {
-      const response = await fetch('/api/habits');
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/habits', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await response.json();
       setHabits(data);
     } catch (err) {
@@ -247,9 +265,13 @@ function Dashboard() {
   const handleHabitSubmit = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/habits', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(habitForm),
       });
       if (response.ok) {
@@ -265,9 +287,13 @@ function Dashboard() {
 
   const toggleHabitCompletion = async (habitId, date, subtaskIndex) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`/api/habits/${habitId}/toggle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ date, subtaskIndex }),
       });
       if (response.ok) {
@@ -296,7 +322,11 @@ function Dashboard() {
   const deleteHabit = async (id) => {
     if (!window.confirm('Are you sure?')) return;
     try {
-      await fetch(`/api/habits/${id}`, { method: 'DELETE' });
+      const token = localStorage.getItem('token');
+      await fetch(`/api/habits/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setHabits(habits.filter(h => h._id !== id));
     } catch (err) {
       console.error('Failed to delete habit');
@@ -314,7 +344,10 @@ function Dashboard() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/entries');
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/entries', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await response.json();
       setEntries(data);
     } catch (err) {
@@ -329,9 +362,13 @@ function Dashboard() {
     setError('');
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/entries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(form),
       });
 
@@ -350,7 +387,11 @@ function Dashboard() {
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+      const token = localStorage.getItem('token');
+      await fetch(`/api/entries/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setEntries((prev) => prev.filter((entry) => entry._id !== id));
     } catch {
       setError('Unable to delete entry.');
@@ -358,6 +399,8 @@ function Dashboard() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     navigate('/signin');
   };
 

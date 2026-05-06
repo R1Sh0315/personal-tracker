@@ -6,7 +6,7 @@ const router = express.Router();
 // Get all journal entries
 router.get('/', async (req, res) => {
   try {
-    const entries = await Journal.find().sort({ date: -1 });
+    const entries = await Journal.find({ user: req.userId }).sort({ date: -1 });
     res.json(entries);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -16,13 +16,8 @@ router.get('/', async (req, res) => {
 // Create a new entry
 router.post('/', async (req, res) => {
   const entry = new Journal({
-    type: req.body.type,
-    content: req.body.content,
-    date: req.body.date || new Date(),
-    symbol: req.body.symbol,
-    pnl: req.body.pnl,
-    mentalState: req.body.mentalState,
-    user: '65e78a2d4f3b2c1d0e9f8a7b' // Mock user ID (should come from auth)
+    ...req.body,
+    user: req.userId
   });
 
   try {
@@ -36,7 +31,8 @@ router.post('/', async (req, res) => {
 // Delete an entry
 router.delete('/:id', async (req, res) => {
   try {
-    await Journal.findByIdAndDelete(req.id);
+    const result = await Journal.findOneAndDelete({ _id: req.params.id, user: req.userId });
+    if (!result) return res.status(404).json({ message: 'Entry not found' });
     res.json({ message: 'Entry deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

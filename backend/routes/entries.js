@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
-    const entries = await Entry.find().sort({ date: -1 });
+    const entries = await Entry.find({ user: req.userId }).sort({ date: -1 });
     res.json(entries);
   } catch (error) {
     res.status(500).json({ error: 'Unable to fetch entries' });
@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const entry = new Entry(req.body);
+    const entry = new Entry({ ...req.body, user: req.userId });
     const savedEntry = await entry.save();
     res.status(201).json(savedEntry);
   } catch (error) {
@@ -24,9 +24,11 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const updatedEntry = await Entry.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
+    const updatedEntry = await Entry.findOneAndUpdate(
+      { _id: req.params.id, user: req.userId },
+      req.body,
+      { new: true }
+    );
     if (!updatedEntry) {
       return res.status(404).json({ error: 'Entry not found' });
     }
@@ -38,7 +40,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const deletedEntry = await Entry.findByIdAndDelete(req.params.id);
+    const deletedEntry = await Entry.findOneAndDelete({ _id: req.params.id, user: req.userId });
     if (!deletedEntry) {
       return res.status(404).json({ error: 'Entry not found' });
     }
